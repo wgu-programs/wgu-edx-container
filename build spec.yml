@@ -6,18 +6,24 @@ phases:
       docker: 20  # Ensures Docker is available in the CodeBuild environment
     commands:
       - echo Installing dependencies...
-      - apt-get update -y && apt-get install -y awscli  # Ensure AWS CLI is available in case the CodeBuild environment doesn’t have it
-      
+      - apt-get update -y && apt-get install -y awscli  # Ensure AWS CLI is available
+      - echo Installing Tutor...
+      - curl -L https://github.com/overhangio/tutor/releases/latest/download/tutor-linux -o /usr/local/bin/tutor
+      - chmod +x /usr/local/bin/tutor
+
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
       - $(aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com)
+      - echo Initializing Tutor project...
+      - tutor config save --set DOCKER_IMAGE_OPENEDX=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/open-edx-tutor
 
   build:
     commands:
-      - echo Building the Docker image...
-      - docker build -t open-edx-tutor .
-      - docker tag open-edx-tutor:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/open-edx-tutor:latest
+      - echo Building the Open edX Docker image with Tutor...
+      - tutor images build openedx  # This builds the Open edX image
+      - echo Tagging the Docker image...
+      - docker tag $(tutor config printvalue DOCKER_IMAGE_OPENEDX):local $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/open-edx-tutor:latest
 
   post_build:
     commands:
